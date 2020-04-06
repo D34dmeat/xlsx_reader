@@ -5,8 +5,10 @@ use std::collections::HashMap;
 use std::char;
 use serde_xml_rs::deserialize;
 
-pub fn parse_xlsx(data: &Vec<u8>, date_columns: Option<Vec<usize>>) -> Result<HashMap<usize, HashMap<usize, String>>, String> {
-  let (strings, sheet) = match parse_xlsx_file_to_parts(data) {
+type SheetContent = HashMap<usize, HashMap<usize, String>>;
+
+pub fn parse_xlsx(data: &Vec<u8>, date_columns: Option<Vec<usize>>) -> Result<Vec<SheetContent>, String> {
+  let (strings, sheets) = match parse_xlsx_file_to_parts(data) {
     Ok(r) => r,
     Err(err) => return Err(err)
   };
@@ -14,10 +16,17 @@ pub fn parse_xlsx(data: &Vec<u8>, date_columns: Option<Vec<usize>>) -> Result<Ha
     Some(m) => m,
     None => return Err("Data extracting error".to_owned())
   };
-  get_parsed_xlsx(map, sheet, date_columns)
+  let mut collection:Vec<SheetContent> = Vec::new();
+  for sheet in sheets{
+    collection.push(get_parsed_xlsx(&map, sheet, &date_columns)?);
+  }
+  match collection.is_empty(){
+    true=>Err("No sheets found".to_string()),
+    false=>Ok(collection)
+  }
 }
 
-pub fn parse_xlsx_file_to_parts(data: &Vec<u8>) -> Result<(String, String), String>
+pub fn parse_xlsx_file_to_parts(data: &Vec<u8>) -> Result<(String, Vec<String>), String>
 {
   let reader = Cursor::new(data);
   let mut zip = match zip::ZipArchive::new(reader) {
@@ -27,6 +36,7 @@ pub fn parse_xlsx_file_to_parts(data: &Vec<u8>) -> Result<(String, String), Stri
 
   let mut strings_content = String::new();
   let mut sheet_content = String::new();
+  let mut sheets = Vec::new();
 
   for i in 0..zip.len() {
     let mut file = match zip.by_index(i) { Ok(f) => f, Err(_) => continue };
@@ -35,14 +45,16 @@ pub fn parse_xlsx_file_to_parts(data: &Vec<u8>) -> Result<(String, String), Stri
         Ok(_) => (), Err(err) => return Err(format!("Can't read strings file: {:?}", err))
       }
     } else {
-      if file.name() == "xl/worksheets/sheet1.xml" {
+      if file.name().starts_with("xl/worksheets/sheet")   {
         match file.read_to_string(&mut sheet_content) {
-          Ok(_) => (), Err(err) => return Err(format!("Can't read sheet file: {:?}", err))
+          Ok(_) =>{sheets.push(sheet_content.clone());sheet_content.clear(); ()}, Err(err) => return Err(format!("Can't read sheet file: {:?}", err))
         }
       }
     }
   }
-  Ok((strings_content, sheet_content))
+  // just in case it is self contained strings str format
+  if strings_content.is_empty(){strings_content=sheets[0].clone();}
+  Ok((strings_content, sheets))
 }
 
 pub fn get_strings_map(strings: String) -> Option<HashMap<usize, String>>
@@ -126,13 +138,13 @@ struct Worksheet {
   pub sheet: Vec<SheetData>
 }
 
-pub fn get_parsed_xlsx(strings_map: HashMap<usize, String>, sheet_content: String, date_columns: Option<Vec<usize>>) -> Result<HashMap<usize, HashMap<usize, String>>, String>
+pub fn get_parsed_xlsx(strings_map: &HashMap<usize, String>, sheet_content: String, date_columns: &Option<Vec<usize>>) -> Result<HashMap<usize, HashMap<usize, String>>, String>
 {
   let worksheet: Worksheet = match deserialize(sheet_content.as_bytes()) {
     Ok(ws) => ws,
     Err(err) => return Err(format!("XML parsing error: {:?}", err))
   };
-  let known_date_columns: Vec<usize> = date_columns.unwrap_or(Vec::new());
+  let known_date_columns: Vec<usize> = date_columns.clone().unwrap_or(Vec::new());
   let sd = &worksheet.sheet[0];
   let mut table: HashMap<usize, HashMap<usize, String>> = HashMap::with_capacity(sd.rows.len());
   let mut ir: usize = 0;

@@ -9,7 +9,8 @@ fn parse_xlsx() {
   }) {
     Ok(_) => {
       match super::parse_xlsx(&content, Some([3].to_vec())) {
-        Ok(table) => {
+        Ok(tables) => {
+          let table = tables[0].clone();
           let ref row1 = table[&2];
           assert_eq!(row1[&2], "Rust");
           assert_eq!(row1[&0], "Test 1");
