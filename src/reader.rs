@@ -1,11 +1,12 @@
 use zip;
 use std::io::Cursor;
 use std::io::Read;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::char;
-use serde_xml_rs::deserialize;
+//use serde_xml_rs::deserialize;
+use quick_xml::de::{from_str as deserialize,DeError};
 
-type SheetContent = HashMap<usize, HashMap<usize, String>>;
+type SheetContent = BTreeMap<usize, BTreeMap<usize, String>>;
 
 pub fn parse_xlsx(data: &Vec<u8>, date_columns: Option<Vec<usize>>) -> Result<Vec<SheetContent>, String> {
   let (strings, sheets) = match parse_xlsx_file_to_parts(data) {
@@ -37,27 +38,39 @@ pub fn parse_xlsx_file_to_parts(data: &Vec<u8>) -> Result<(String, Vec<String>),
   let mut strings_content = String::new();
   let mut sheet_content = String::new();
   let mut sheets = Vec::new();
-
-  for i in 0..zip.len() {
+  if let Ok(mut file) = zip.by_name("xl/sharedStrings.xml"){
+    match file.read_to_string(&mut strings_content) {
+      Ok(_) => (), Err(err) => return Err(format!("Can't read strings file: {:?}", err))
+    }
+  }
+  let sh = zip.file_names().map(|n|n.to_owned()).filter(|name|name.starts_with("xl/worksheets/sheet")).collect::<Vec<_>>();
+  for s in sh{
+    if let Ok(mut file) = zip.by_name(&s){
+      match file.read_to_string(&mut sheet_content) {
+        Ok(_) =>{sheets.push(sheet_content.clone());sheet_content.clear(); ()}, Err(err) => return Err(format!("Can't read sheet file: {:?}", err))
+      }
+    }
+  }
+  /* for i in 0..zip.len() {
     let mut file = match zip.by_index(i) { Ok(f) => f, Err(_) => continue };
-    if file.name() == "xl/sharedStrings.xml" {
+    /* if file.name() == "xl/sharedStrings.xml" {
       match file.read_to_string(&mut strings_content) {
         Ok(_) => (), Err(err) => return Err(format!("Can't read strings file: {:?}", err))
       }
-    } else {
+    } else { */
       if file.name().starts_with("xl/worksheets/sheet")   {
         match file.read_to_string(&mut sheet_content) {
           Ok(_) =>{sheets.push(sheet_content.clone());sheet_content.clear(); ()}, Err(err) => return Err(format!("Can't read sheet file: {:?}", err))
         }
       }
-    }
-  }
+   // }
+  } */
   // just in case it is self contained strings str format
   if strings_content.is_empty(){strings_content=sheets[0].clone();}
   Ok((strings_content, sheets))
 }
 
-pub fn get_strings_map(strings: String) -> Option<HashMap<usize, String>>
+pub fn get_strings_map(strings: String) -> Option<BTreeMap<usize, String>>
 {
   #[derive(Debug, Deserialize)]
   struct T {
@@ -81,11 +94,11 @@ pub fn get_strings_map(strings: String) -> Option<HashMap<usize, String>>
     si: Vec<Si>
   }
 
-  let sst: Sst = match deserialize(strings.as_bytes()) {
+  let sst: Sst = match deserialize(&strings) {
     Ok(c) => c,
     Err(_) => return None
   };
-  let mut map: HashMap<usize, String> = HashMap::new();
+  let mut map: BTreeMap<usize, String> = BTreeMap::new();
   let mut i = 0;
   for si in sst.si.iter() {
     if let Some(ref sits) = si.t {
@@ -138,19 +151,19 @@ struct Worksheet {
   pub sheet: Vec<SheetData>
 }
 
-pub fn get_parsed_xlsx(strings_map: &HashMap<usize, String>, sheet_content: String, date_columns: &Option<Vec<usize>>) -> Result<HashMap<usize, HashMap<usize, String>>, String>
+pub fn get_parsed_xlsx(strings_map: &BTreeMap<usize, String>, sheet_content: String, date_columns: &Option<Vec<usize>>) -> Result<BTreeMap<usize, BTreeMap<usize, String>>, String>
 {
-  let worksheet: Worksheet = match deserialize(sheet_content.as_bytes()) {
+  let worksheet: Worksheet = match deserialize(&sheet_content) {
     Ok(ws) => ws,
     Err(err) => return Err(format!("XML parsing error: {:?}", err))
   };
   let known_date_columns: Vec<usize> = date_columns.clone().unwrap_or(Vec::new());
   let sd = &worksheet.sheet[0];
-  let mut table: HashMap<usize, HashMap<usize, String>> = HashMap::with_capacity(sd.rows.len());
+  let mut table: BTreeMap<usize, BTreeMap<usize, String>> = BTreeMap::new();//with_capacity(sd.rows.len());
   let mut ir: usize = 0;
   for row in sd.rows.iter() {
     if let Some(ref cells) = row.cells {
-      let mut tr: HashMap<usize, String> = HashMap::with_capacity(cells.len());
+      let mut tr: BTreeMap<usize, String> = BTreeMap::new();//with_capacity(cells.len());
       let mut i: usize = 0;
       for cell in cells.iter() {
         if let Some(ref cell_r) = cell.r {
