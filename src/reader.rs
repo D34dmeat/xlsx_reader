@@ -262,7 +262,7 @@ pub fn excel_date(src: &str, days_offset: Option<f64>) -> Option<String> {
   }
 }
 
-pub fn excel_str_cell(row: usize, cell: usize) -> String {
+/* pub fn excel_str_cell(row: usize, cell: usize) -> String {
   if cell == 0 {
     return format!("A{}", row);
   }
@@ -277,7 +277,7 @@ pub fn excel_str_cell(row: usize, cell: usize) -> String {
   }
 
   format!("{}{}", column_name, row)
-}
+} */
 
 fn char_index(cell:&str)->usize{
     let mut chars = cell.chars();
