@@ -41,7 +41,7 @@ fn parse_ny_xlsx() {
         Ok(tables) => {
           for table in tables.iter(){
             for (index,row) in table{
-              println!("first cell {}",row[&0] );
+              println!("Row {}  cell 0: {:?} \t\t1: {:?} \t\t2: {:?}",index,row.get(&0),row.get(&1),row.get(&2) );
             }
           }
           /* let ref row1 = table[&2];
@@ -61,6 +61,8 @@ fn parse_ny_xlsx() {
     Err(_) => panic!("Test file not found")
   }
 }
+
+
 
 //#[test]
 //fn debug() {

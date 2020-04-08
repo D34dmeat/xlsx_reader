@@ -43,28 +43,22 @@ pub fn parse_xlsx_file_to_parts(data: &Vec<u8>) -> Result<(String, Vec<String>),
       Ok(_) => (), Err(err) => return Err(format!("Can't read strings file: {:?}", err))
     }
   }
-  let sh = zip.file_names().map(|n|n.to_owned()).filter(|name|name.starts_with("xl/worksheets/sheet")).collect::<Vec<_>>();
+  /* let sh = zip.file_names().map(|n|n.to_owned()).filter(|name|name.starts_with("xl/worksheets/sheet")).collect::<Vec<_>>();
   for s in sh{
     if let Ok(mut file) = zip.by_name(&s){
       match file.read_to_string(&mut sheet_content) {
         Ok(_) =>{sheets.push(sheet_content.clone());sheet_content.clear(); ()}, Err(err) => return Err(format!("Can't read sheet file: {:?}", err))
       }
     }
-  }
-  /* for i in 0..zip.len() {
+  } */
+  for i in 0..zip.len() {
     let mut file = match zip.by_index(i) { Ok(f) => f, Err(_) => continue };
-    /* if file.name() == "xl/sharedStrings.xml" {
-      match file.read_to_string(&mut strings_content) {
-        Ok(_) => (), Err(err) => return Err(format!("Can't read strings file: {:?}", err))
-      }
-    } else { */
       if file.name().starts_with("xl/worksheets/sheet")   {
         match file.read_to_string(&mut sheet_content) {
           Ok(_) =>{sheets.push(sheet_content.clone());sheet_content.clear(); ()}, Err(err) => return Err(format!("Can't read sheet file: {:?}", err))
         }
       }
-   // }
-  } */
+  }
   // just in case it is self contained strings str format
   if strings_content.is_empty(){strings_content=sheets[0].clone();}
   Ok((strings_content, sheets))
@@ -168,13 +162,9 @@ pub fn get_parsed_xlsx(strings_map: &BTreeMap<usize, String>, sheet_content: Str
       for cell in cells.iter() {
         if let Some(ref cell_r) = cell.r {
           let pre_i = i;
-          i = 0;
-          while excel_str_cell(ir + 1, i) != cell_r.as_str() {
-            i += 1;
-            if i > 16384 { // https://support.office.com/en-us/article/excel-specifications-and-limits-1672b34d-7043-467e-8e27-269d656771c3
-              i = pre_i;
-              break;
-            }
+          i = char_index(cell_r)-1;
+          if i > 16384 { // https://support.office.com/en-us/article/excel-specifications-and-limits-1672b34d-7043-467e-8e27-269d656771c3
+            i = pre_i;
           }
         }
         if let Some(ref cv) = cell.v {
@@ -305,8 +295,15 @@ fn char_index(cell:&str)->usize{
 sum as usize
 }
 
-impl From<&str> for usize{
-   fn to_index(i:&str)->Self{
-      char_index(i)
+
+struct Index(usize);
+impl From<usize> for Index{
+  fn from(t: usize)->Self{
+    Index(t)
+  }
+}
+impl From<&str> for Index{
+   fn from(i:&str)->Self{
+      Index(char_index(i))
   }
 }
