@@ -292,15 +292,21 @@ pub fn excel_str_cell(row: usize, cell: usize) -> String {
 fn char_index(cell:&str)->usize{
     let mut chars = cell.chars();
     let mut i = 0;
-    let mut sum = 0
+    let mut sum = 0;
     while let Some(n) = chars.next(){
       if n.to_digit(10).is_none(){
          if let Some(num) = n.to_digit(36){
-             sum = sum*(36*i);
+             sum = sum*(26*i);
              sum += num-9;
              i += 1;
          }
       }
     }
-sum
+sum as usize
+}
+
+impl From<&str> for usize{
+   fn to_index(i:&str)->Self{
+      char_index(i)
+  }
 }
